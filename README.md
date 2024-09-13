@@ -1,0 +1,2 @@
+# PNGShrink
+Cut white borders
