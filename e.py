@@ -1,38 +1,27 @@
 import argparse
+import cv2
+import numpy as np
 import os
-from PIL import Image
-def trim_white_border(image_path):
-    img = Image.open(image_path)
-    img = img.convert("RGBA")
-    data = img.getdata()
-    width, height = img.size
-    left, right, top, bottom = width, 0, height, 0
-    for y in range(height):
-        for x in range(width):
-            r, g, b, a = data[y * width + x]
-            if a != 0 and (r, g, b) != (255, 255, 255):
-                left = min(left, x)
-                right = max(right, x)
-                top = min(top, y)
-                bottom = max(bottom, y)
-    cropped_img = img.crop((left, top, right + 1, bottom + 1))
-    cropped_img.save(image_path)
-def get_latest_png_file(directory):
-    png_files = [f for f in os.listdir(directory) if f.endswith('.png')]
-    if not png_files:
-        return None
-    latest_file = max(png_files, key=lambda f: os.path.getmtime(os.path.join(directory, f)))
-    return os.path.join(directory, latest_file)
-def main():
-    parser = argparse.ArgumentParser(description="裁剪PNG图片的白色边框")
-    parser.add_argument("image_path", type=str, nargs='?', help="要裁剪的PNG图片的路径")
-    args = parser.parse_args()
-    if not args.image_path:
-        args.image_path = get_latest_png_file('.')
-        if not args.image_path:
-            print("当前目录中没有找到PNG文件。")
-            return
-    trim_white_border(args.image_path)
-    print(f"已裁剪并覆盖保存: {args.image_path}")
+def trim_image(image_path):
+    image = cv2.imread(image_path, cv2.IMREAD_UNCHANGED)
+    if image.shape[-1] == 4:
+        mask = image[:, :, 3] > 0
+    else:
+        mask = np.any(image != image[0, 0], axis=-1)
+    coords = np.argwhere(mask)
+    y0, x0 = coords.min(axis=0)
+    y1, x1 = coords.max(axis=0) + 1
+    cv2.imwrite(image_path, image[y0:y1, x0:x1])
+def process_directory(directory):
+    for root, _, files in os.walk(directory):
+        for file in files:
+            if file.lower().endswith((".jpg", ".png")):
+                trim_image(os.path.join(root, file))
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("input")
+    args = parser.parse_args()
+    if os.path.isdir(args.input):
+        process_directory(args.input)
+    else:
+        trim_image(args.input)
